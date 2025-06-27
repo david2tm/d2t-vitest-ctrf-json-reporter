@@ -129,8 +129,12 @@ class GenerateCtrfReport implements Reporter {
     }
 
     if (this.reporterConfigOptions.minimal === false) {
-      test.message = this.extractFailureDetails(testCase).message
-      test.trace = this.extractFailureDetails(testCase).trace
+      const failureDetails = this.extractFailureDetails(testCase)
+      test.message = failureDetails.message
+      test.trace = failureDetails.trace
+      if (failureDetails.line !== undefined) {
+        test.line = failureDetails.line
+      }
       test.rawStatus = testCase.result().state
       test.type = this.reporterConfigOptions.testType ?? 'unit'
       test.filePath = testCase.module.moduleId
@@ -144,18 +148,75 @@ class GenerateCtrfReport implements Reporter {
 
   extractFailureDetails(testCase: TestCase): Partial<CtrfTest> {
     const testResult = testCase.result()
+    
     if (isTestFailed(testResult)) {
       const failureDetails: Partial<CtrfTest> = {}
       failureDetails.message = testResult.errors
         .map((error) => error.message)
         .join('\n')
-      failureDetails.trace = testResult.errors
+      
+      const trace = testResult.errors
         .map((error) => error.stack)
         .filter(Boolean)
         .join('\n\n')
+      
+      failureDetails.trace = trace
+      
+      // Extract line number from stack trace for failed tests
+      if (trace && testCase.module.moduleId) {
+        const lineNumber = this.extractLineNumber(trace, testCase.module.moduleId)
+        if (lineNumber !== undefined) {
+          failureDetails.line = lineNumber
+        }
+      }
+      
       return failureDetails
     }
     return {}
+  }
+
+  private parseStackTrace(stackString: string): Array<{file: string | null, lineNumber: number | null}> {
+    // Node.js stack trace regex pattern from stacktrace-parser library
+    // https://github.com/errwischt/stacktrace-parser
+    const nodeRe = /^\s*at (?:((?:\[object object\])?[^\\/]+(?: \[as \S+\])?) )?\(?(.*?):(\d+)(?::(\d+))?\)?\s*$/i
+    const lines = stackString.split('\n')
+    
+    return lines.reduce<Array<{file: string | null, lineNumber: number | null}>>((stack, line) => {
+      const parts = nodeRe.exec(line)
+      
+      if (parts) {
+        stack.push({
+          file: parts[2] || null,
+          lineNumber: parts[3] ? +parts[3] : null
+        })
+      }
+      
+      return stack
+    }, [])
+  }
+
+  private extractLineNumber(trace: string, testFilePath: string): number | undefined {
+    try {
+      const stackFrames = this.parseStackTrace(trace)
+      
+      // Find the first stack frame that matches the test file path
+      const testFrame = stackFrames.find(frame => {
+        if (!frame.file) {
+          return false
+        }
+        
+        // Normalize paths for comparison
+        const normalizedFrameFile = path.resolve(frame.file)
+        const normalizedTestFile = path.resolve(testFilePath)
+        
+        return normalizedFrameFile === normalizedTestFile
+      })
+      
+      return testFrame?.lineNumber ?? undefined
+    } catch {
+      // Gracefully handle parsing errors
+      return undefined
+    }
   }
 
   private updateTotalsFromTestResult(testCase: TestCase): void {

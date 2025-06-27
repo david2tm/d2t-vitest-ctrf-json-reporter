@@ -122,3 +122,4 @@ The test object in the report includes the following [CTRF properties](https://c
 | `filepath`  | String  | Optional | The file path where the test is located in the project.                             |
 | `retries`   | Number  | Optional | The number of retries attempted for the test.                                       |
 | `flaky`     | Boolean | Optional | Indicates whether the test result is flaky.                                         |
+| `line`      | Number  | Optional | Line number in the source file if the test failed.                                  |
