@@ -27,6 +27,7 @@ interface ReporterConfigOptions {
   repositoryUrl?: string | undefined
   branchName?: string | undefined
   testEnvironment?: string | undefined
+  verbose?: boolean
 }
 
 class GenerateCtrfReport implements Reporter {
@@ -57,9 +58,15 @@ class GenerateCtrfReport implements Reporter {
       repositoryUrl: reporterOptions?.repositoryUrl ?? undefined,
       branchName: reporterOptions?.branchName ?? undefined,
       testEnvironment: reporterOptions?.testEnvironment ?? undefined,
+      verbose: reporterOptions?.verbose ?? false,
     }
 
     this.ctrfReport = {
+      reportFormat: 'CTRF',
+      specVersion: '0.0.0',
+      reportId: crypto.randomUUID(),
+      timestamp: new Date().toISOString(),
+      generatedBy: 'd2t-vitest-ctrf-json-reporter',
       results: {
         tool: {
           name: 'vitest',
@@ -303,11 +310,13 @@ class GenerateCtrfReport implements Reporter {
     const str = JSON.stringify(data, null, 2)
     try {
       fs.writeFileSync(filePath, str + '\n')
-      console.log(
-        `${this.reporterName}: successfully written ctrf json to %s/%s`,
-        this.reporterConfigOptions.outputDir,
-        this.filename
-      )
+      if (this.reporterConfigOptions.verbose) {
+        console.log(
+          `${this.reporterName}: successfully written ctrf json to %s/%s`,
+          this.reporterConfigOptions.outputDir,
+          this.filename
+        )
+      }
     } catch (error) {
       console.error(`Error writing ctrf json report:, ${String(error)}`)
     }
